@@ -44,11 +44,22 @@ class DoubleConvBlock(nn.Module):
         return self.model(x)
 
 
+class Probe(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.value = None
+
+    def forward(self, x):
+        self.value = x
+        return x
+
+
 class MnistModel(nn.Module):
     def __init__(self, batch_norm=False):
         super().__init__()
 
         self.batch_norm = batch_norm
+        self.probe = Probe()
 
         layers = [
             nn.Flatten(),
@@ -64,6 +75,7 @@ class MnistModel(nn.Module):
         if batch_norm:
             layers.append(BatchNorm())
         layers += [
+            self.probe,
             nn.Sigmoid(),
             nn.Linear(100, 10),
             nn.Sigmoid()
@@ -92,6 +104,7 @@ class Cifar10Model(nn.Module):
         # 16x32x32 -> 32x16x16
         layers += [DoubleConvBlock(16, 32, batch_norm=batch_norm)]
         layers += [DoubleConvBlock(32, 32, batch_norm=batch_norm) for _ in range(k - 1)]
+        layers.append(self.probe)
 
         # 32x16x16 -> 64x8x8
         layers += [DoubleConvBlock(32, 64, batch_norm=batch_norm)]
