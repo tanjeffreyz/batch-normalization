@@ -9,14 +9,14 @@ class BatchNorm(nn.Module):
         self.epsilon = 1E-5     # Same as PyTorch
 
         # Trainable parameters
-        self.beta = torch.nn.Parameter(data=torch.tensor(0))
-        self.gamma = torch.nn.Parameter(data=torch.tensor(1))
+        self.beta = torch.nn.Parameter(data=torch.tensor(0.0))
+        self.gamma = torch.nn.Parameter(data=torch.tensor(1.0))
         self.register_parameter('beta', self.beta)
         self.register_parameter('gamma', self.gamma)
 
     def forward(self, x):
-        batch_mean = torch.mean(x).item()
-        batch_var = torch.var(x, unbiased=False).item()
+        batch_mean = torch.mean(x)
+        batch_var = torch.var(x, unbiased=False)
         x_hat = (x - batch_mean) / torch.sqrt(batch_var + self.epsilon)
         return self.gamma * x_hat + self.beta
 
@@ -37,6 +37,37 @@ class DoubleConvBlock(nn.Module):
         if batch_norm:
             layers.append(BatchNorm())
         layers.append(nn.ReLU())
+
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+class MnistModel(nn.Module):
+    def __init__(self, batch_norm=False):
+        super().__init__()
+
+        self.batch_norm = batch_norm
+
+        layers = [
+            nn.Flatten(),
+            nn.Linear(28 * 28, 100),
+        ]
+        for _ in range(2):
+            if batch_norm:
+                layers.append(BatchNorm())
+            layers += [
+                nn.Sigmoid(),
+                nn.Linear(100, 100)
+            ]
+        if batch_norm:
+            layers.append(BatchNorm())
+        layers += [
+            nn.Sigmoid(),
+            nn.Linear(100, 10),
+            nn.Sigmoid()
+        ]
 
         self.model = nn.Sequential(*layers)
 

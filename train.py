@@ -1,41 +1,30 @@
 import torch
 import os
 import ssl
+import argparse
 import numpy as np
 import torchvision.transforms as T
 from tqdm import tqdm
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets.cifar import CIFAR10
+from torchvision.datasets.mnist import MNIST
 from torch.utils.data import DataLoader
-from models import Cifar10Model
+from models import Cifar10Model, MnistModel
 
 
-writer = SummaryWriter()
-now = datetime.now()
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-num_layers = 32
-batch_size = 128
-transform = T.Compose([
-    T.ToTensor(),
-    lambda x: x - torch.mean(x, (1, 2), keepdim=True)
-])
-
-ssl._create_default_https_context = ssl._create_unverified_context      # Patch expired certificate error
-train_set = CIFAR10(root='data', download=True, transform=transform)
-train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-test_set = CIFAR10(root='data', transform=transform)
-test_loader = DataLoader(test_set, batch_size=batch_size)
+BATCH_SIZE = 128
+LEARNING_RATE = 1E-2
 
 
-def train(model):
-    opt = torch.optim.Adam(model.parameters())
+def train(dataset_name, m):
+    opt = torch.optim.Adam(m.parameters(), lr=LEARNING_RATE)
     loss_func = torch.nn.CrossEntropyLoss()
 
     root = os.path.join(
         'models',
-        'with_batch_norm' if model.batch_norm else 'no_batch_norm',
+        dataset_name,
+        'with_batch_norm' if m.batch_norm else 'no_batch_norm',
         now.strftime('%m_%d_%Y'),
         now.strftime('%H_%M_%S')
     )
@@ -62,7 +51,7 @@ def train(model):
             labels = labels.to(device)
 
             opt.zero_grad()
-            predictions = model(data)
+            predictions = m(data)
             loss = loss_func(predictions, labels)
             loss.backward()
             opt.step()
@@ -82,7 +71,7 @@ def train(model):
                 data = data.to(device)
                 labels = labels.to(device)
 
-                predictions = model(data)
+                predictions = m(data)
                 loss = loss_func(predictions, labels)
 
                 test_loss += loss.item() / len(test_loader)
@@ -96,11 +85,55 @@ def train(model):
             if epoch % 2 == 0:
                 save_metrics()
             if epoch % 20 == 0:
-                torch.save(model.state_dict(), os.path.join(weight_dir, f'cp_{epoch}'))
+                torch.save(m.state_dict(), os.path.join(weight_dir, f'cp_{epoch}'))
     save_metrics()
-    torch.save(model.state_dict(), os.path.join(weight_dir, 'final'))
+    torch.save(m.state_dict(), os.path.join(weight_dir, 'final'))
 
 
 if __name__ == '__main__':
-    train(Cifar10Model(num_layers).to(device))
-    train(Cifar10Model(num_layers, batch_norm=True).to(device))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('dataset', type=str, choices=('cifar10', 'mnist'))
+    parser.add_argument('-bn', '--batch-norm', action='store_true')
+    args = parser.parse_args()
+
+    writer = SummaryWriter()
+    now = datetime.now()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    if args.dataset == 'cifar10':
+        num_layers = 32
+        transform = T.Compose([
+            T.ToTensor(),
+            lambda x: x - torch.mean(x, (1, 2), keepdim=True)
+        ])
+
+        ssl._create_default_https_context = ssl._create_unverified_context  # Patch expired certificate error
+        train_set = CIFAR10(
+            root='data',
+            train=True,
+            download=True,
+            transform=transform
+        )
+        test_set = CIFAR10(
+            root='data',
+            train=False,
+            transform=transform
+        )
+        model = Cifar10Model(num_layers, batch_norm=args.bn).to(device)
+    else:
+        train_set = MNIST(
+            root='data',
+            train=True,
+            download=True,
+            transform=T.ToTensor()
+        )
+        test_set = MNIST(
+            root='data',
+            train=False,
+            transform=T.ToTensor()
+        )
+        model = MnistModel(batch_norm=args.bn).to(device)
+    train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True)
+    test_loader = DataLoader(test_set, batch_size=BATCH_SIZE)
+
+    train(args.dataset, model)
