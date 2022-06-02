@@ -17,7 +17,10 @@ BATCH_SIZE = 128
 LEARNING_RATE = 1E-2
 
 
-def train(dataset_name, m):
+def train(m, dataset_name, epochs, cp_interval):
+    writer = SummaryWriter()
+    now = datetime.now()
+
     opt = torch.optim.Adam(m.parameters(), lr=LEARNING_RATE)
     loss_func = torch.nn.CrossEntropyLoss()
 
@@ -43,7 +46,7 @@ def train(dataset_name, m):
         np.save(os.path.join(root, 'train_errors'), train_errors)
         np.save(os.path.join(root, 'test_errors'), test_errors)
 
-    for epoch in tqdm(range(160), desc='Epoch'):
+    for epoch in tqdm(range(epochs), desc='Epoch'):
         train_loss = 0
         train_acc = 0
         for data, labels in tqdm(train_loader, desc='Train', leave=False):
@@ -64,27 +67,26 @@ def train(dataset_name, m):
         writer.add_scalar('Loss/train', train_loss, epoch)
         writer.add_scalar('Error/train', 1 - train_acc, epoch)
 
-        with torch.no_grad():
-            test_loss = 0
-            test_acc = 0
-            for data, labels in tqdm(test_loader, desc='Test', leave=False):
-                data = data.to(device)
-                labels = labels.to(device)
+        if epoch % cp_interval == 0:
+            with torch.no_grad():
+                test_loss = 0
+                test_acc = 0
+                for data, labels in tqdm(test_loader, desc='Test', leave=False):
+                    data = data.to(device)
+                    labels = labels.to(device)
 
-                predictions = m(data)
-                loss = loss_func(predictions, labels)
+                    predictions = m(data)
+                    loss = loss_func(predictions, labels)
 
-                test_loss += loss.item() / len(test_loader)
-                test_acc += labels.eq(torch.argmax(predictions, 1)).sum().item() / len(test_set)
-                del data, labels
-            test_losses = np.append(test_losses, [[epoch, test_loss]])
-            test_errors = np.append(test_errors, [[epoch, 1 - test_acc]])
-            writer.add_scalar('Loss/test', test_loss, epoch)
-            writer.add_scalar('Error/test', 1 - test_acc, epoch)
+                    test_loss += loss.item() / len(test_loader)
+                    test_acc += labels.eq(torch.argmax(predictions, 1)).sum().item() / len(test_set)
+                    del data, labels
+                test_losses = np.append(test_losses, [[epoch, test_loss]])
+                test_errors = np.append(test_errors, [[epoch, 1 - test_acc]])
+                writer.add_scalar('Loss/test', test_loss, epoch)
+                writer.add_scalar('Error/test', 1 - test_acc, epoch)
 
-            if epoch % 2 == 0:
                 save_metrics()
-            if epoch % 20 == 0:
                 torch.save(m.state_dict(), os.path.join(weight_dir, f'cp_{epoch}'))
     save_metrics()
     torch.save(m.state_dict(), os.path.join(weight_dir, 'final'))
@@ -93,15 +95,13 @@ def train(dataset_name, m):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('dataset', type=str, choices=('cifar10', 'mnist'))
-    parser.add_argument('-bn', '--batch-norm', action='store_true')
+    parser.add_argument('-bn', '--batch-norm', action='store_true', default=False)
     args = parser.parse_args()
 
-    writer = SummaryWriter()
-    now = datetime.now()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
     if args.dataset == 'cifar10':
-        num_layers = 32
+        num_epochs = 160
+        cp_int = 4
         transform = T.Compose([
             T.ToTensor(),
             lambda x: x - torch.mean(x, (1, 2), keepdim=True)
@@ -119,8 +119,10 @@ if __name__ == '__main__':
             train=False,
             transform=transform
         )
-        model = Cifar10Model(num_layers, batch_norm=args.bn).to(device)
+        model = Cifar10Model(32, batch_norm=args.batch_norm).to(device)
     else:
+        num_epochs = 100
+        cp_int = 2
         train_set = MNIST(
             root='data',
             train=True,
@@ -132,8 +134,8 @@ if __name__ == '__main__':
             train=False,
             transform=T.ToTensor()
         )
-        model = MnistModel(batch_norm=args.bn).to(device)
+        model = MnistModel(batch_norm=args.batch_norm).to(device)
     train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=BATCH_SIZE)
 
-    train(args.dataset, model)
+    train(model, args.dataset, num_epochs, cp_int)
