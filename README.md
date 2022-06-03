@@ -5,7 +5,7 @@
 mlpi
 title: Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift
 category: Techniques
-images:
+images: results/mnist/accuracies.png, results/mnist/activations.png
 -->
 
 <h1 align="center">Batch Normalization</h1>
