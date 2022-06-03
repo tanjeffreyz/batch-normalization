@@ -19,7 +19,7 @@ a greater accuracy, which is consistent with the findings in [1].
 
 ![](results/mnist/accuracies.png)
 
-<br><br>
+<br>
 
 The input distribution to the sigmoid activation function in the last (3rd) hidden layer was probed during each iteration.
 In bottom-up order, the 15th, 50th, and 85th percentiles of the input distribution over all iterations are plotted below:
