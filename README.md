@@ -13,10 +13,11 @@ PyTorch implementation of batch normalization from "Batch Normalization: Acceler
 
 
 ## Results
-![](results/mnist/accuracies.png)
 
 On the MNIST dataset, batch normalization (BN) not only helped the model converge faster, but also allowed it to achieve
 a greater accuracy, which is consistent with the findings in [1].
+
+![](results/mnist/accuracies.png)
 
 <br>
 
