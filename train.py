@@ -14,7 +14,7 @@ from models import Cifar10Model, MnistModel
 
 
 BATCH_SIZE = 128
-LEARNING_RATE = 1E-2
+LEARNING_RATE = 1E-3
 
 
 def train(m, dataset_name, epochs, cp_interval):
@@ -35,16 +35,19 @@ def train(m, dataset_name, epochs, cp_interval):
     if not os.path.exists(weight_dir):
         os.makedirs(weight_dir)
 
-    train_losses = np.empty((0, 2))
-    test_losses = np.empty((0, 2))
-    train_errors = np.empty((0, 2))
-    test_errors = np.empty((0, 2))
+    train_losses = np.empty((2, 0))
+    test_losses = np.empty((2, 0))
+    train_errors = np.empty((2, 0))
+    test_errors = np.empty((2, 0))
+    input_dist_percentiles = np.empty((4, 0))
+    percentile_i = 0        # Need to track percentiles every iteration
 
     def save_metrics():
         np.save(os.path.join(root, 'train_losses'), train_losses)
         np.save(os.path.join(root, 'test_losses'), test_losses)
         np.save(os.path.join(root, 'train_errors'), train_errors)
         np.save(os.path.join(root, 'test_errors'), test_errors)
+        np.save(os.path.join(root, 'input_dist_percentiles'), input_dist_percentiles)
 
     for epoch in tqdm(range(epochs), desc='Epoch'):
         train_loss = 0
@@ -62,8 +65,8 @@ def train(m, dataset_name, epochs, cp_interval):
             train_loss += loss.item() / len(train_loader)
             train_acc += labels.eq(torch.argmax(predictions, 1)).sum().item() / len(train_set)
             del data, labels
-        train_losses = np.append(train_losses, [[epoch, train_loss]])
-        train_errors = np.append(train_errors, [[epoch, 1 - train_acc]])
+        train_losses = np.append(train_losses, [[epoch], [train_loss]], axis=1)
+        train_errors = np.append(train_errors, [[epoch], [1 - train_acc]], axis=1)
         writer.add_scalar('Loss/train', train_loss, epoch)
         writer.add_scalar('Error/train', 1 - train_acc, epoch)
 
@@ -80,9 +83,18 @@ def train(m, dataset_name, epochs, cp_interval):
 
                     test_loss += loss.item() / len(test_loader)
                     test_acc += labels.eq(torch.argmax(predictions, 1)).sum().item() / len(test_set)
+
+                    if isinstance(model, MnistModel):
+                        percentiles = get_percentiles(model.probe.value.cpu(), (15, 50, 85))
+                        input_dist_percentiles = np.append(
+                            input_dist_percentiles,
+                            [[percentile_i]] + [[x] for x in percentiles],
+                            axis=1
+                        )
+                        percentile_i += 1
                     del data, labels
-                test_losses = np.append(test_losses, [[epoch, test_loss]])
-                test_errors = np.append(test_errors, [[epoch, 1 - test_acc]])
+                test_losses = np.append(test_losses, [[epoch], [test_loss]], axis=1)
+                test_errors = np.append(test_errors, [[epoch], [1 - test_acc]], axis=1)
                 writer.add_scalar('Loss/test', test_loss, epoch)
                 writer.add_scalar('Error/test', 1 - test_acc, epoch)
 
@@ -90,6 +102,10 @@ def train(m, dataset_name, epochs, cp_interval):
                 torch.save(m.state_dict(), os.path.join(weight_dir, f'cp_{epoch}'))
     save_metrics()
     torch.save(m.state_dict(), os.path.join(weight_dir, 'final'))
+
+
+def get_percentiles(x, percentiles):
+    return [np.percentile(x, p) for p in percentiles]
 
 
 if __name__ == '__main__':
@@ -122,7 +138,7 @@ if __name__ == '__main__':
         model = Cifar10Model(32, batch_norm=args.batch_norm).to(device)
     else:
         num_epochs = 100
-        cp_int = 2
+        cp_int = 1
         train_set = MNIST(
             root='data',
             train=True,
