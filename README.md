@@ -32,5 +32,5 @@ has yet to reach that point.
 
 
 ## References
-[[1]](https://arxiv.org/abs/1502.03167) Sergey Ioffe, Christian Szegedy. *Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift*.
+[[1](https://arxiv.org/abs/1502.03167)] Sergey Ioffe, Christian Szegedy. *Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift*.
 arXiv:1502.03167v3 [cs.LG] 2 Mar 2015
