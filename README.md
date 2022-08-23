@@ -23,7 +23,7 @@ In bottom-up order, the 15th, 50th, and 85th percentiles of the input distributi
 
 ![](results/mnist/activations.png)
 
-BN makes the distribution far more stable, which helps the model converge faster during training.
+BN makes the distribution far more stable and helps the model converge faster during training.
 In the above plots, the BN model's distribution converges and plateaus quickly, whereas the non-BN model's distribution
 has yet to reach that point.
 
